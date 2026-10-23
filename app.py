@@ -65,8 +65,8 @@ with col_logo:
     st.image(url_escudo, width=110)
 
 with col_titulo:
-    st.markdown("## **Fraternidad Laica Dominicana**")
-    st.markdown("### *Panteón - Consulta de Estado de Cuenta*" )
+    st.markdown("## **Fraternidad Laica Dominicana de Cordoba**")
+    st.markdown("### *Panteón Social - Consulta de Estado de Cuenta de Nichos*" )
 
 st.success("🏛️ **Portal Web Oficial de Consultas** — Panteón Fraternidad Laica Dominicana")
 st.markdown("---")
@@ -119,7 +119,7 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
 # AYUDA PARA ENCONTRAR DATOS EN EL RECIBO
 with st.expander("❓ ¿Dónde encuentro estos datos en mi recibo físico?"):
     st.write("Consulte en la siguiente imagen de muestra la ubicación exacta de cada dato dentro del comprobante:")
-    ruta_imagen = "MUESTRA-RECIBO.JPG"
+    ruta_imagen = "MUESTRA-RECIBO.jpg"
     if os.path.exists(ruta_imagen):
         st.image(ruta_imagen, caption="Ubicación de datos en el recibo de muestra", use_container_width=True)
     else:
