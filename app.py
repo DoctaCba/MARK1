@@ -4,7 +4,7 @@ import streamlit as st
 
 # Configuración de página
 st.set_page_config(
-    page_title="Panteón Fraternidad Laica Dominicana - Consulta Oficial",
+    page_title="Panteón Social - Fraternidad Laica Dominicana de Córdoba",
     page_icon="🏛️",
     layout="centered"
 )
@@ -59,16 +59,28 @@ def procesar_resultado(fila):
 # --- ENCABEZADO INSTITUCIONAL ---
 col_logo, col_titulo = st.columns([1, 4])
 
+# Búsqueda inteligente de imagen de logo local
+posibles_logos = ["logo.png", "logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
+logo_encontrado = None
+
+for l in posibles_logos:
+    if os.path.exists(l):
+        logo_encontrado = l
+        break
+
 with col_logo:
-    # URL pública del Escudo Dominico tradicional (blanco y negro cuartelado)
-    url_escudo = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Dominican_Order_coat_of_arms.svg/300px-Dominican_Order_coat_of_arms.svg.png"
-    st.image(url_escudo, width=110)
+    if logo_encontrado:
+        st.image(logo_encontrado, width=110)
+    else:
+        # Respaldo web si no subiste aún el logo.png
+        url_escudo = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Dominican_Order_coat_of_arms.svg/300px-Dominican_Order_coat_of_arms.svg.png"
+        st.image(url_escudo, width=110)
 
 with col_titulo:
-    st.markdown("## **Fraternidad Laica Dominicana de Cordoba**")
-    st.markdown("### *Panteón Social - Consulta de Estado de Cuenta de Nichos*" )
+    st.markdown("## **Fraternidad Laica Dominicana de Córdoba**")
+    st.markdown("### 🏛️ *Panteón Social - Consulta de Estado de Cuenta*")
 
-st.success("🏛️ **Portal Web Oficial de Consultas** — Panteón Fraternidad Laica Dominicana")
+st.success("🏛️ **Portal Web Oficial de Consultas** — Panteón Social Fraternidad Laica Dominicana de Córdoba")
 st.markdown("---")
 
 # --- GUÍA PASO A PASO PARA EL USUARIO ---
@@ -83,7 +95,7 @@ with col2:
 with col3:
     titular_nom_in = st.text_input("3. Nombre / Apellido", help="Apellido o nombre del titular")
 
-# Botón de consulta prominente
+# Botón de consulta
 if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary"):
     estado, res = consultar_deuda(titular_num_in, nicho_in, titular_nom_in)
     
@@ -119,18 +131,30 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
 # AYUDA PARA ENCONTRAR DATOS EN EL RECIBO
 with st.expander("❓ ¿Dónde encuentro estos datos en mi recibo físico?"):
     st.write("Consulte en la siguiente imagen de muestra la ubicación exacta de cada dato dentro del comprobante:")
-    ruta_imagen = "MUESTRA-RECIBO.jpg"
-    if os.path.exists(ruta_imagen):
-        st.image(ruta_imagen, caption="Ubicación de datos en el recibo de muestra", use_container_width=True)
+    
+    # Búsqueda flexible de la imagen del recibo
+    posibles_recibos = [
+        "MUESTRA-RECIBO.JPG", "muestra-recibo.jpg", "MUESTRA-RECIBO.jpg", 
+        "muestra-recibo.png", "MUESTRA-RECIBO.PNG", "muestra_recibo.png"
+    ]
+    
+    recibo_encontrado = None
+    for r in posibles_recibos:
+        if os.path.exists(r):
+            recibo_encontrado = r
+            break
+
+    if recibo_encontrado:
+        st.image(recibo_encontrado, caption="Ubicación de datos en el recibo de muestra", use_container_width=True)
     else:
-        st.warning("Sugerencia: Cargue el archivo MUESTRA-RECIBO.JPG en el sistema.")
+        st.warning("⚠️ No se encontró la imagen del recibo. Asegúrese de que el archivo esté subido en GitHub.")
 
 # PIE DE PÁGINA INSTITUCIONAL
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #555555; font-size: 0.9em;'>
-        <p><b>Administración Panteón Fraternidad Laica Dominicana</b><br>
+        <p><b>Administración Panteón Social Fraternidad Laica Dominicana de Córdoba</b><br>
         Córdoba, Argentina | Atención presencial y telefónica de lunes a viernes.<br>
         <i>Portal Web de Consulta Segura</i></p>
     </div>
