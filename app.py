@@ -60,7 +60,7 @@ def procesar_resultado(fila):
 col_logo, col_titulo = st.columns([1, 4])
 
 # Búsqueda inteligente de imagen de logo local
-posibles_logos = ["logo.png", "logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
+posibles_logos = ["Logo.png", "logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
 logo_encontrado = None
 
 for l in posibles_logos:
