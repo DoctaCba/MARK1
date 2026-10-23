@@ -4,7 +4,7 @@ import streamlit as st
 
 # 1. Cargar el archivo CSV (se lee directamente de la carpeta de GitHub)
 try:
-    df = pd.read_csv("ReportGeneral.csv", sep=",")
+    df = pd.read_csv("ReportGeneral.csv", sep=":")
 except Exception:
     df = pd.read_csv("ReportGeneral.csv")
 
