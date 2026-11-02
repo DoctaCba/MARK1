@@ -1,4 +1,6 @@
 import os
+import re
+import unicodedata
 import pandas as pd
 import streamlit as st
 
@@ -8,6 +10,15 @@ st.set_page_config(
     page_icon="🏛️",
     layout="centered"
 )
+
+# Función para normalizar texto (quita tildes, caracteres especiales y mayúsculas)
+def normalizar(texto):
+    if pd.isna(texto):
+        return ""
+    texto = str(texto)
+    texto = unicodedata.normalize('NFD', texto)
+    texto = re.sub(r'[\u0300-\u036f]', '', texto)
+    return re.sub(r'[^A-ZA-Z0-9]', '', texto.upper())
 
 # 1. Cargar el archivo CSV de forma flexible
 @st.cache_data
@@ -20,7 +31,6 @@ def cargar_datos():
             try:
                 df_temp = pd.read_csv("ReportGeneral.csv", sep=sep, encoding=enc, on_bad_lines="skip", low_memory=False)
                 if df_temp.shape[1] > 1:
-                    # Limpiar espacios en blanco alrededor de los nombres de las columnas
                     df_temp.columns = df_temp.columns.str.strip()
                     return df_temp
             except Exception:
@@ -33,29 +43,21 @@ except Exception as e:
     st.error(f"Error al cargar la base de datos: {e}")
     st.stop()
 
-# Función para encontrar el nombre exacto de la columna ignorando mayúsculas/espacios
-def obtener_columna(df_in, posible_nombre):
-    posible_nombre_limpio = posible_nombre.strip().lower().replace(".", "").replace(" ", "")
+# Mapeo inteligente de columnas
+def buscar_columna_real(df_in, clave_busqueda):
+    clave_norm = normalizar(clave_busqueda)
     for col in df_in.columns:
-        col_limpia = str(col).strip().lower().replace(".", "").replace(" ", "")
-        if col_limpia == posible_nombre_limpio:
+        if normalizar(col) == clave_norm or clave_norm in normalizar(col):
             return col
     return None
 
-# Nombres reales de las columnas en el dataframe cargado
-col_num_titular = obtener_columna(df, 'Nro. Titular') or 'Nro. Titular'
-col_nicho = obtener_columna(df, 'Nicho') or 'Nicho'
-col_titular = obtener_columna(df, 'Titular') or 'Titular'
-col_tipo_arrendamiento = obtener_columna(df, 'Tipo Arrendamiento') or 'Tipo Arrendamiento'
-col_deuda_arr = obtener_columna(df, 'Deuda Arr') or 'Deuda Arr'
-col_deuda_mcl = obtener_columna(df, 'Deuda MCL') or 'Deuda MCL'
-col_deuda_total = obtener_columna(df, 'Deuda Total') or 'Deuda Total'
-
-# Limpieza de texto para la búsqueda
-def limpiar_texto(texto):
-    if pd.isna(texto):
-        return ""
-    return str(texto).strip().upper().replace(",", "").replace(".", "")
+col_num_titular = buscar_columna_real(df, 'NRO TITULAR') or buscar_columna_real(df, 'TITULAR NRO')
+col_nicho = buscar_columna_real(df, 'NICHO')
+col_titular = buscar_columna_real(df, 'TITULAR')
+col_tipo_arrendamiento = buscar_columna_real(df, 'TIPO ARRENDAMIENTO')
+col_deuda_arr = buscar_columna_real(df, 'DEUDA ARR')
+col_deuda_mcl = buscar_columna_real(df, 'DEUDA MCL')
+col_deuda_total = buscar_columna_real(df, 'DEUDA TOTAL')
 
 # Lógica de búsqueda "2 de 3"
 def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
@@ -67,16 +69,16 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
     df_temp = df.copy()
     coincidencias = pd.Series([True] * len(df_temp))
     
-    if num_titular_user and col_num_titular in df_temp.columns:
+    if num_titular_user and col_num_titular:
         coincidencias &= (df_temp[col_num_titular].astype(str).str.strip() == str(num_titular_user).strip())
     
-    if nicho_user and col_nicho in df_temp.columns:
-        nicho_limpio = limpiar_texto(nicho_user)
-        coincidencias &= df_temp[col_nicho].apply(limpiar_texto).str.contains(nicho_limpio, regex=False)
+    if nicho_user and col_nicho:
+        nicho_norm = normalizar(nicho_user)
+        coincidencias &= df_temp[col_nicho].apply(normalizar).str.contains(nicho_norm, regex=False)
         
-    if nombre_titular_user and col_titular in df_temp.columns:
-        nombre_limpio = limpiar_texto(nombre_titular_user)
-        coincidencias &= df_temp[col_titular].apply(limpiar_texto).str.contains(nombre_limpio, regex=False)
+    if nombre_titular_user and col_titular:
+        nombre_norm = normalizar(nombre_titular_user)
+        coincidencias &= df_temp[col_titular].apply(normalizar).str.contains(nombre_norm, regex=False)
         
     resultado = df_temp[coincidencias]
     
@@ -87,8 +89,8 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
 
 # Regla de desvío a Legales/Administración
 def procesar_resultado(fila):
-    if col_tipo_arrendamiento in fila:
-        estado = str(fila.get(col_tipo_arrendamiento, '')).upper()
+    if col_tipo_arrendamiento and col_tipo_arrendamiento in fila:
+        estado = normalizar(fila.get(col_tipo_arrendamiento, ''))
         if "JURIDICO" in estado or "LEGAL" in estado or "ESTUDIO" in estado:
             return "DESVIAR_WHATSAPP"
     return "MOSTRAR_DEUDA"
@@ -149,13 +151,19 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
             st.markdown("### 📄 Detalle de la Cuenta")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.write(f"**Titular:** {res.get(col_titular, 'N/A')}")
-                st.write(f"**N° de Titular:** {res.get(col_num_titular, 'N/A')}")
-                st.write(f"**Nicho:** {res.get(col_nicho, 'N/A')}")
+                val_titular = res[col_titular] if col_titular else 'N/A'
+                val_num = res[col_num_titular] if col_num_titular else 'N/A'
+                val_nicho = res[col_nicho] if col_nicho else 'N/A'
+                st.write(f"**Titular:** {val_titular}")
+                st.write(f"**N° de Titular:** {val_num}")
+                st.write(f"**Nicho:** {val_nicho}")
             with col_b:
-                st.write(f"**Deuda Arrendamiento (ARR):** ${res.get(col_deuda_arr, 0)}")
-                st.write(f"**Deuda Mantenimiento (MCL):** ${res.get(col_deuda_mcl, 0)}")
-                st.markdown(f"#### **Total a Pagar:** ${res.get(col_deuda_total, 0)}")
+                val_arr = res[col_deuda_arr] if col_deuda_arr else 0
+                val_mcl = res[col_deuda_mcl] if col_deuda_mcl else 0
+                val_tot = res[col_deuda_total] if col_deuda_total else 0
+                st.write(f"**Deuda Arrendamiento (ARR):** ${val_arr}")
+                st.write(f"**Deuda Mantenimiento (MCL):** ${val_mcl}")
+                st.markdown(f"#### **Total a Pagar:** ${val_tot}")
             
             st.markdown("---")
             st.warning("⚠️ **Aviso importante:** Los montos mostrados son válidos hasta el **30 de octubre de 2026**.")
