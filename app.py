@@ -20,22 +20,24 @@ def normalizar(texto):
     texto = re.sub(r'[\u0300-\u036f]', '', texto)
     return re.sub(r'[^A-ZA-Z0-9]', '', texto.upper())
 
-# 1. Cargar el archivo CSV de forma flexible
+# 1. Cargar el archivo CSV garantizando la separación de columnas
 @st.cache_data
 def cargar_datos():
-    encodings = ['latin-1', 'cp1252', 'utf-8', 'iso-8859-1']
-    delimitadores = [';', ',']
+    encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+    delimitadores = [',', ';']  # Probamos primero la coma
     
     for enc in encodings:
         for sep in delimitadores:
             try:
                 df_temp = pd.read_csv("ReportGeneral.csv", sep=sep, encoding=enc, on_bad_lines="skip", low_memory=False)
-                if df_temp.shape[1] > 1:
+                # Exigimos que tenga más de 3 columnas para asegurar que separó correctamente los campos
+                if df_temp.shape[1] > 3:
                     df_temp.columns = df_temp.columns.str.strip()
                     return df_temp
             except Exception:
                 continue
-    return pd.read_csv("ReportGeneral.csv", on_bad_lines="skip")
+    # Respaldo por defecto leyendo con coma
+    return pd.read_csv("ReportGeneral.csv", sep=",", encoding="latin-1", on_bad_lines="skip")
 
 try:
     df = cargar_datos()
