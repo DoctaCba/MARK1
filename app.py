@@ -9,13 +9,49 @@ st.set_page_config(
     layout="centered"
 )
 
-# 1. Cargar el archivo CSV
-try:
-    df = pd.read_csv("ReportGeneral.csv", sep=";")
-except Exception:
-    df = pd.read_csv("ReportGeneral.csv")
+# 1. Cargar el archivo CSV de forma flexible
+@st.cache_data
+def cargar_datos():
+    encodings = ['latin-1', 'cp1252', 'utf-8', 'iso-8859-1']
+    delimitadores = [';', ',']
+    
+    for enc in encodings:
+        for sep in delimitadores:
+            try:
+                df_temp = pd.read_csv("ReportGeneral.csv", sep=sep, encoding=enc, on_bad_lines="skip", low_memory=False)
+                if df_temp.shape[1] > 1:
+                    # Limpiar espacios en blanco alrededor de los nombres de las columnas
+                    df_temp.columns = df_temp.columns.str.strip()
+                    return df_temp
+            except Exception:
+                continue
+    return pd.read_csv("ReportGeneral.csv", on_bad_lines="skip")
 
-# Limpieza de texto
+try:
+    df = cargar_datos()
+except Exception as e:
+    st.error(f"Error al cargar la base de datos: {e}")
+    st.stop()
+
+# Función para encontrar el nombre exacto de la columna ignorando mayúsculas/espacios
+def obtener_columna(df_in, posible_nombre):
+    posible_nombre_limpio = posible_nombre.strip().lower().replace(".", "").replace(" ", "")
+    for col in df_in.columns:
+        col_limpia = str(col).strip().lower().replace(".", "").replace(" ", "")
+        if col_limpia == posible_nombre_limpio:
+            return col
+    return None
+
+# Nombres reales de las columnas en el dataframe cargado
+col_num_titular = obtener_columna(df, 'Nro. Titular') or 'Nro. Titular'
+col_nicho = obtener_columna(df, 'Nicho') or 'Nicho'
+col_titular = obtener_columna(df, 'Titular') or 'Titular'
+col_tipo_arrendamiento = obtener_columna(df, 'Tipo Arrendamiento') or 'Tipo Arrendamiento'
+col_deuda_arr = obtener_columna(df, 'Deuda Arr') or 'Deuda Arr'
+col_deuda_mcl = obtener_columna(df, 'Deuda MCL') or 'Deuda MCL'
+col_deuda_total = obtener_columna(df, 'Deuda Total') or 'Deuda Total'
+
+# Limpieza de texto para la búsqueda
 def limpiar_texto(texto):
     if pd.isna(texto):
         return ""
@@ -31,16 +67,16 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
     df_temp = df.copy()
     coincidencias = pd.Series([True] * len(df_temp))
     
-    if num_titular_user:
-        coincidencias &= (df_temp['Nro. Titular'].astype(str).str.strip() == str(num_titular_user).strip())
+    if num_titular_user and col_num_titular in df_temp.columns:
+        coincidencias &= (df_temp[col_num_titular].astype(str).str.strip() == str(num_titular_user).strip())
     
-    if nicho_user:
+    if nicho_user and col_nicho in df_temp.columns:
         nicho_limpio = limpiar_texto(nicho_user)
-        coincidencias &= df_temp['Nicho'].apply(limpiar_texto).str.contains(nicho_limpio, regex=False)
+        coincidencias &= df_temp[col_nicho].apply(limpiar_texto).str.contains(nicho_limpio, regex=False)
         
-    if nombre_titular_user:
+    if nombre_titular_user and col_titular in df_temp.columns:
         nombre_limpio = limpiar_texto(nombre_titular_user)
-        coincidencias &= df_temp['Titular'].apply(limpiar_texto).str.contains(nombre_limpio, regex=False)
+        coincidencias &= df_temp[col_titular].apply(limpiar_texto).str.contains(nombre_limpio, regex=False)
         
     resultado = df_temp[coincidencias]
     
@@ -51,18 +87,17 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
 
 # Regla de desvío a Legales/Administración
 def procesar_resultado(fila):
-    estado = str(fila.get('Tipo Arrendamiento', '')).upper()
-    if "JURIDICO" in estado or "LEGAL" in estado or "ESTUDIO" in estado:
-        return "DESVIAR_WHATSAPP"
+    if col_tipo_arrendamiento in fila:
+        estado = str(fila.get(col_tipo_arrendamiento, '')).upper()
+        if "JURIDICO" in estado or "LEGAL" in estado or "ESTUDIO" in estado:
+            return "DESVIAR_WHATSAPP"
     return "MOSTRAR_DEUDA"
 
 # --- ENCABEZADO INSTITUCIONAL ---
 col_logo, col_titulo = st.columns([1, 4])
 
-# Búsqueda inteligente de imagen de logo local
-posibles_logos = ["Logo.png", "Logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
+posibles_logos = ["logo.png", "logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
 logo_encontrado = None
-
 for l in posibles_logos:
     if os.path.exists(l):
         logo_encontrado = l
@@ -72,7 +107,6 @@ with col_logo:
     if logo_encontrado:
         st.image(logo_encontrado, width=110)
     else:
-        # Respaldo web si no subiste aún el logo.png
         url_escudo = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Dominican_Order_coat_of_arms.svg/300px-Dominican_Order_coat_of_arms.svg.png"
         st.image(url_escudo, width=110)
 
@@ -115,13 +149,13 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
             st.markdown("### 📄 Detalle de la Cuenta")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.write(f"**Titular:** {res['Titular']}")
-                st.write(f"**N° de Titular:** {res['Nro. Titular']}")
-                st.write(f"**Nicho:** {res['Nicho']}")
+                st.write(f"**Titular:** {res.get(col_titular, 'N/A')}")
+                st.write(f"**N° de Titular:** {res.get(col_num_titular, 'N/A')}")
+                st.write(f"**Nicho:** {res.get(col_nicho, 'N/A')}")
             with col_b:
-                st.write(f"**Deuda Arrendamiento (ARR):** ${res.get('Deuda Arr', 0)}")
-                st.write(f"**Deuda Mantenimiento (MCL):** ${res.get('Deuda MCL', 0)}")
-                st.markdown(f"#### **Total a Pagar:** ${res.get('Deuda Total', 0)}")
+                st.write(f"**Deuda Arrendamiento (ARR):** ${res.get(col_deuda_arr, 0)}")
+                st.write(f"**Deuda Mantenimiento (MCL):** ${res.get(col_deuda_mcl, 0)}")
+                st.markdown(f"#### **Total a Pagar:** ${res.get(col_deuda_total, 0)}")
             
             st.markdown("---")
             st.warning("⚠️ **Aviso importante:** Los montos mostrados son válidos hasta el **30 de octubre de 2026**.")
@@ -132,7 +166,6 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
 with st.expander("❓ ¿Dónde encuentro estos datos en mi recibo físico?"):
     st.write("Consulte en la siguiente imagen de muestra la ubicación exacta de cada dato dentro del comprobante:")
     
-    # Búsqueda flexible de la imagen del recibo
     posibles_recibos = [
         "MUESTRA-RECIBO.JPG", "muestra-recibo.jpg", "MUESTRA-RECIBO.jpg", 
         "muestra-recibo.png", "MUESTRA-RECIBO.PNG", "muestra_recibo.png"
