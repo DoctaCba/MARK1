@@ -100,7 +100,7 @@ def procesar_resultado(fila):
 # --- ENCABEZADO INSTITUCIONAL ---
 col_logo, col_titulo = st.columns([1, 4])
 
-posibles_logos = ["logo.png", "logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
+posibles_logos = ["logo.png", "Logo.jpg", "logo.jpeg", "LOGO.PNG", "LOGO.JPG"]
 logo_encontrado = None
 for l in posibles_logos:
     if os.path.exists(l):
