@@ -4,7 +4,7 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 
-# Configuración de página
+# Configuración de la página
 st.set_page_config(
     page_title="Panteón Social - Fraternidad Laica Dominicana de Córdoba",
     page_icon="🏛️",
@@ -20,23 +20,20 @@ def normalizar(texto):
     texto = re.sub(r'[\u0300-\u036f]', '', texto)
     return re.sub(r'[^A-ZA-Z0-9]', '', texto.upper())
 
-# 1. Cargar el archivo CSV garantizando la separación de columnas
+# 1. Cargar el archivo CSV garantizando la lectura correcta de las 48 columnas
 @st.cache_data
 def cargar_datos():
+    # Se fuerza el uso de coma como separador y on_bad_lines='skip' por filas defectuosas
     encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-    delimitadores = [',', ';']  # Probamos primero la coma
-    
     for enc in encodings:
-        for sep in delimitadores:
-            try:
-                df_temp = pd.read_csv("ReportGeneral.csv", sep=sep, encoding=enc, on_bad_lines="skip", low_memory=False)
-                # Exigimos que tenga más de 3 columnas para asegurar que separó correctamente los campos
-                if df_temp.shape[1] > 3:
-                    df_temp.columns = df_temp.columns.str.strip()
-                    return df_temp
-            except Exception:
-                continue
-    # Respaldo por defecto leyendo con coma
+        try:
+            df_temp = pd.read_csv("ReportGeneral.csv", sep=",", encoding=enc, on_bad_lines="skip", low_memory=False)
+            if df_temp.shape[1] > 10:
+                # Limpiar espacios en los nombres de las columnas
+                df_temp.columns = df_temp.columns.str.strip()
+                return df_temp
+        except Exception:
+            continue
     return pd.read_csv("ReportGeneral.csv", sep=",", encoding="latin-1", on_bad_lines="skip")
 
 try:
@@ -45,21 +42,21 @@ except Exception as e:
     st.error(f"Error al cargar la base de datos: {e}")
     st.stop()
 
-# Mapeo inteligente de columnas
+# Mapeo exacto de las columnas de tu CSV
 def buscar_columna_real(df_in, clave_busqueda):
     clave_norm = normalizar(clave_busqueda)
     for col in df_in.columns:
-        if normalizar(col) == clave_norm or clave_norm in normalizar(col):
+        if normalizar(col) == clave_norm:
             return col
     return None
 
-col_num_titular = buscar_columna_real(df, 'NRO TITULAR') or buscar_columna_real(df, 'TITULAR NRO')
-col_nicho = buscar_columna_real(df, 'NICHO')
-col_titular = buscar_columna_real(df, 'TITULAR')
-col_tipo_arrendamiento = buscar_columna_real(df, 'TIPO ARRENDAMIENTO')
-col_deuda_arr = buscar_columna_real(df, 'DEUDA ARR')
-col_deuda_mcl = buscar_columna_real(df, 'DEUDA MCL')
-col_deuda_total = buscar_columna_real(df, 'DEUDA TOTAL')
+col_num_titular = buscar_columna_real(df, 'Nro. Titular') or 'Nro. Titular'
+col_nicho = buscar_columna_real(df, 'Nicho') or 'Nicho'
+col_titular = buscar_columna_real(df, 'Titular') or 'Titular'
+col_tipo_arrendamiento = buscar_columna_real(df, 'Tipo Arrendamiento') or 'Tipo Arrendamiento'
+col_deuda_arr = buscar_columna_real(df, 'Deuda Arr') or 'Deuda Arr'
+col_deuda_mcl = buscar_columna_real(df, 'Deuda MCL') or 'Deuda MCL'
+col_deuda_total = buscar_columna_real(df, 'Deuda Total') or 'Deuda Total'
 
 # Lógica de búsqueda "2 de 3"
 def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
@@ -71,14 +68,17 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
     df_temp = df.copy()
     coincidencias = pd.Series([True] * len(df_temp))
     
-    if num_titular_user and col_num_titular:
-        coincidencias &= (df_temp[col_num_titular].astype(str).str.strip() == str(num_titular_user).strip())
+    if num_titular_user and col_num_titular in df_temp.columns:
+        # Comparación numérica o de texto limpio quitando ceros a la izquierda
+        num_ingresado_limpio = str(num_titular_user).strip().lstrip('0')
+        serie_titular_limpia = df_temp[col_num_titular].astype(str).str.strip().str.lstrip('0')
+        coincidencias &= (serie_titular_limpia == num_ingresado_limpio)
     
-    if nicho_user and col_nicho:
+    if nicho_user and col_nicho in df_temp.columns:
         nicho_norm = normalizar(nicho_user)
         coincidencias &= df_temp[col_nicho].apply(normalizar).str.contains(nicho_norm, regex=False)
         
-    if nombre_titular_user and col_titular:
+    if nombre_titular_user and col_titular in df_temp.columns:
         nombre_norm = normalizar(nombre_titular_user)
         coincidencias &= df_temp[col_titular].apply(normalizar).str.contains(nombre_norm, regex=False)
         
@@ -91,7 +91,7 @@ def consultar_deuda(num_titular_user, nicho_user, nombre_titular_user):
 
 # Regla de desvío a Legales/Administración
 def procesar_resultado(fila):
-    if col_tipo_arrendamiento and col_tipo_arrendamiento in fila:
+    if col_tipo_arrendamiento in fila:
         estado = normalizar(fila.get(col_tipo_arrendamiento, ''))
         if "JURIDICO" in estado or "LEGAL" in estado or "ESTUDIO" in estado:
             return "DESVIAR_WHATSAPP"
@@ -127,11 +127,11 @@ st.caption("Para proteger sus datos y validar su identidad, **ingrese al menos 2
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    titular_num_in = st.text_input("1. N° de Titular", help="Ejemplo: 1234")
+    titular_num_in = st.text_input("1. N° de Titular", help="Ejemplo: 5531")
 with col2:
     nicho_in = st.text_input("2. Ubicación de Nicho", help="Ejemplo: 01 B 016 8")
 with col3:
-    titular_nom_in = st.text_input("3. Nombre / Apellido", help="Apellido o nombre del titular")
+    titular_nom_in = st.text_input("3. Nombre / Apellido", help="Ejemplo: SORIA LUIS JACINTO")
 
 # Botón de consulta
 if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary"):
@@ -153,19 +153,19 @@ if st.button("🔍 CONSULTAR MI CUENTA", use_container_width=True, type="primary
             st.markdown("### 📄 Detalle de la Cuenta")
             col_a, col_b = st.columns(2)
             with col_a:
-                val_titular = res[col_titular] if col_titular else 'N/A'
-                val_num = res[col_num_titular] if col_num_titular else 'N/A'
-                val_nicho = res[col_nicho] if col_nicho else 'N/A'
+                val_titular = res.get(col_titular, 'N/A')
+                val_num = res.get(col_num_titular, 'N/A')
+                val_nicho = res.get(col_nicho, 'N/A')
                 st.write(f"**Titular:** {val_titular}")
                 st.write(f"**N° de Titular:** {val_num}")
                 st.write(f"**Nicho:** {val_nicho}")
             with col_b:
-                val_arr = res[col_deuda_arr] if col_deuda_arr else 0
-                val_mcl = res[col_deuda_mcl] if col_deuda_mcl else 0
-                val_tot = res[col_deuda_total] if col_deuda_total else 0
-                st.write(f"**Deuda Arrendamiento (ARR):** ${val_arr}")
-                st.write(f"**Deuda Mantenimiento (MCL):** ${val_mcl}")
-                st.markdown(f"#### **Total a Pagar:** ${val_tot}")
+                val_arr = res.get(col_deuda_arr, 0)
+                val_mcl = res.get(col_deuda_mcl, 0)
+                val_tot = res.get(col_deuda_total, 0)
+                st.write(f"**Deuda Arrendamiento (ARR):** ${val_arr:,.2f}" if isinstance(val_arr, (int, float)) else f"**Deuda Arrendamiento (ARR):** ${val_arr}")
+                st.write(f"**Deuda Mantenimiento (MCL):** ${val_mcl:,.2f}" if isinstance(val_mcl, (int, float)) else f"**Deuda Mantenimiento (MCL):** ${val_mcl}")
+                st.markdown(f"#### **Total a Pagar:** ${val_tot:,.2f}" if isinstance(val_tot, (int, float)) else f"#### **Total a Pagar:** ${val_tot}")
             
             st.markdown("---")
             st.warning("⚠️ **Aviso importante:** Los montos mostrados son válidos hasta el **30 de octubre de 2026**.")
